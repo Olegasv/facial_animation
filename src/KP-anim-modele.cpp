@@ -12,10 +12,12 @@ fitness for a particular purpose and is not liable under any
 circumstances for any damages or loss whatsoever arising from the use
 or inability to use this file or items derived from it.
 ******************************************************************************/
+#include <windows.h>
+#include <stdint.h>
 #include <GL/gl.h>
 #include <GL/glu.h>
 #include <GL/glut.h>
-
+#include <limits>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,23 +32,7 @@ or inability to use this file or items derived from it.
 
 #include <fcntl.h>
 #include <errno.h>
-#ifndef _WIN32
-#include <time.h>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <unistd.h>
-#else
-//#define socklen_t int
-#include <winsock2.h>
-#include <Ws2tcpip.h>
-//#include <wspiapi.h>
-#endif
 
-#include <pthread.h>
 
 #define    KEY_ESC  27
 #define    PI       3.1415926535898
@@ -231,8 +217,6 @@ float (*curve)(float elapsed, float duration, float startVal, float endVal);
 
 int main(int argc, char **argv);
 
-void parse_mesh_obj( char *fileName );
-void parse_KP_obj( char *fileName );
 void locate_KP_in_mesh( void );
 WeightingType weight_one_vertex( int indVertex , int indKP ,
 				 float radius , int exponent , 
@@ -258,8 +242,6 @@ void window_special_key(int key, int x, int y);
 
 void render_scene( void );
 
-void init_client();
-void main_client();
 float curve_ease_inout_quad(float elapsed, float duration, float startVal, float endVal);
 float curve_linear(float elapsed, float duration, float startVal, float endVal);
 void init_time_counter();
@@ -481,6 +463,29 @@ int      NbFaces = 0;
 int      NbNormals = 0;
 int      NbKPs = 0;
 
+int gettimeofday(struct timeval * tp, struct timezone * tzp)
+{
+	// Note: some broken versions only have 8 trailing zero's, the correct epoch has 9 trailing zero's
+	// This magic number is the number of 100 nanosecond intervals since January 1, 1601 (UTC)
+	// until 00:00:00 January 1, 1970 
+	static const uint64_t EPOCH = ((uint64_t)116444736000000000ULL);
+
+	SYSTEMTIME  system_time;
+	FILETIME    file_time;
+	uint64_t    time;
+
+	GetSystemTime(&system_time);
+	SystemTimeToFileTime(&system_time, &file_time);
+	time = ((uint64_t)file_time.dwLowDateTime);
+	time += ((uint64_t)file_time.dwHighDateTime) << 32;
+
+	tp->tv_sec = (long)((time - EPOCH) / 10000000L);
+	tp->tv_usec = (long)(system_time.wMilliseconds * 1000);
+	return 0;
+}
+
+
+
 //////////////////////////////////////////////////////////////////
 // MAIN EVENT LOOP
 //////////////////////////////////////////////////////////////////
@@ -534,9 +539,6 @@ int main(int argc, char **argv)
   // for special keys
   // glutSpecialFunc(&window_special_key);
   
-  // add client idle func (checks the socket to translate keypoints)
-  // init_client();
-  // glutIdleFunc(main_client);
   // use idle func to run facial animation
   glutIdleFunc(idle_func);
   
@@ -824,7 +826,7 @@ void locate_KP_in_mesh( void ) {
     for( int indKP = 0 ; indKP < NbKPs ; indKP++ ) {
       if( TabKPs[indKP].indMesh == indMesh ) {
 	// accesses the vertices from a mesh and its faces
-	float minDist = MAXFLOAT;
+		  float minDist = FLT_MAX;
 	int indVertexKP = -1;
 	for (int indFace = TabMeshes[ indMesh ].indFaceIni ; 
 	     indFace < TabMeshes[ indMesh ].indFaceEnd ; 
@@ -916,7 +918,7 @@ WeightingType weight_one_vertex( int indVertex , int indKP ,
     // a previous one or not
     
     // find closest KPs to vertex
-    int TabIndKPsSorted[NbKPs];
+    int TabIndKPsSorted[10000];
     for (int iKP = 0; iKP < NbKPs; iKP++) {
       TabIndKPsSorted[iKP] = iKP;
     }
@@ -1167,7 +1169,7 @@ void init_scene( void )
   NbNormals = 0;
 
   // parses the mesh (obj format)
-  FILE * fileMesh = fopen( MeshFileName , "r" ); 
+  FILE * fileMesh = fopen("d:\\Work\\facial_animation\\vs\\vs\\Debug\\head_modified.obj", "r");// +MeshFileName, "r" );
   if( !fileMesh ) {
     printf( "File %s not found\n" , MeshFileName );
     exit(0);
@@ -1176,7 +1178,7 @@ void init_scene( void )
   fclose( fileMesh );
 
   // parses the keypoints
-  FILE * fileKP = fopen( KPFileName , "r" ); 
+  FILE * fileKP = fopen("d:\\Work\\facial_animation\\vs\\vs\\Debug\\head_modified_KP.obj", "r");// KPFileName, "r" );
   if( !fileKP ) {
     printf( "File %s not found, no keypoint defined for this mesh\n" , KPFileName );
   }
@@ -1683,107 +1685,7 @@ KP *keypoint_with_id(char *id) {
 
 // local server socket
 
-void init_client() {
-    // local server address
-    unsigned int Local_server_port = 1979;
 
-    ///////////////////////////////
-    // local server creation
-    struct sockaddr_in localServAddr;
-
-  #ifndef _WIN32
-    int SocketToLocalServerFlags;
-    /* socket creation */
-    SocketToLocalServer = socket(AF_INET, SOCK_DGRAM, 0);
-
-    if(SocketToLocalServer < 0) {
-      printf( "Error: udp server cannot open socket to local server!\n" ); 
-      throw(0);
-    }
-    else {
-      // Read the socket's flags
-      SocketToLocalServerFlags = fcntl(SocketToLocalServer, F_GETFL, 0);
-      // Sets the socket's flags to non-blocking
-      SocketToLocalServerFlags |= O_NONBLOCK;
-      int ret = fcntl(SocketToLocalServer, F_SETFL, SocketToLocalServerFlags );
-      if(ret < 0) {
-        printf(  "Error: udp server cannot set flag to non-blocking: %s!" , 
-  	       strerror(errno) );
-        throw(0);
-      }
-   }
-  #else
-    // socket creation
-    SocketToLocalServer = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-
-    if(SocketToLocalServer < 0) {
-      printf( "Error: udp server cannot open socket to local server!\n" ); 
-      throw(0);
-    }
-    else {
-      // Read the socket's flags
-      unsigned long onoff=1;
-    
-      if (ioctlsocket(SocketToLocalServer, FIONBIO, &onoff) != 0){
-        printf(  "Error: udp server cannot set flag to non-blocking: %s!" , 
-  	       strerror(errno) );
-        throw(0);
-      }
-    }
-  #endif
-    
-    // bind local server port
-    localServAddr.sin_family = AF_INET;
-    localServAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    localServAddr.sin_port = htons(Local_server_port);
-  
-    int rc = bind (SocketToLocalServer, 
-  		 (struct sockaddr *) &localServAddr,sizeof(localServAddr));
-    if(rc < 0) {
-      printf( "Error: cannot bind locat port number %d!" , Local_server_port );
-      throw(0);
-    }
-    printf("udp server: waiting for data on port UDP %u\n", Local_server_port);
-}
-
-void main_client(){
-    // reads incoming UDP messages
-    if( SocketToLocalServer >= 0 ) {
-      char    message[1024];
-      // init message buffer: Null values
-      memset(message,0x0,1024);
-    
-      // receive message
-      int n = recv(SocketToLocalServer, message, 1024, 0);
-      if( n >= 0 ) {
-	// scans the message and extract string & float values
-	char KP_ID[256];
-	int Keyframe;
-	float KP_translation[3];
-	// printf( "Message size %d\n" , n );
-	// printf( "Rec.: [%s]\n" , message );
-	sscanf( message , "%s %d %f %f %f" , KP_ID , &Keyframe ,
-		KP_translation , KP_translation + 1 , KP_translation + 2 );
-	printf( "ID [%s] KF [%d] tr (%.3f,%.3f,%.3f)\n" , KP_ID , Keyframe ,
-		KP_translation[0] , KP_translation[1] , KP_translation[2] );
-        // find the keypoint
-        KP *kp = keypoint_with_id(KP_ID);
-        if(kp != NULL) {
-            // update translation
-            kp->translation.x = KP_translation[0];
-            kp->translation.y = KP_translation[1];
-            kp->translation.z = KP_translation[2];
-            // update rendering
-            animate_vertices_in_mesh();
-            glDeleteLists(MeshID, 1);  
-            make_mesh();
-            glutPostRedisplay();
-        } else {
-            printf("no keypoint found for id: %s\n", KP_ID);
-        }
-      }
-    }
-}
 
 float curve_ease_inout_quad(float elapsed, float duration, float startVal, float endVal) {
     float u = elapsed / (duration / 2);
@@ -1876,7 +1778,6 @@ void animate_frame() {
 }
 
 void idle_func() {
-    // main_client();
     // printf("idle func\n");
     // fflush(stdout);
     if (isAnimating) {
