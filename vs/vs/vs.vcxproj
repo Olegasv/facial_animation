@@ -150,7 +150,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\src\KP-anim-modele.cpp" />
+    <ClCompile Include="KP-anim-modele.cpp" />
+    <ClCompile Include="path_utils.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="path_utils.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
