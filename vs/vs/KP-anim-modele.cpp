@@ -1,17 +1,3 @@
-/*****************************************************************************
-File: KP-anim-modele.cpp
-
-Virtual Humans
-Master in Computer Science
-Christian Jacquemin, University Paris 11
-
-Copyright (C) 2008 University Paris 11 
-This file is provided without support, instruction, or implied
-warranty of any kind.  University Paris 11 makes no guarantee of its
-fitness for a particular purpose and is not liable under any
-circumstances for any damages or loss whatsoever arising from the use
-or inability to use this file or items derived from it.
-******************************************************************************/
 #include <windows.h>
 #include <stdint.h>
 #include <GL/gl.h>
@@ -22,16 +8,8 @@ or inability to use this file or items derived from it.
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#ifdef __APPLE__
-    #include <limits.h>
-#elif __linux
-    #include <values.h>
-#endif
 #include <ctype.h>
 #include <stdbool.h>
-
-#include <fcntl.h>
-#include <errno.h>
 #include <string>
 #include "path_utils.hpp"
 
@@ -198,9 +176,6 @@ std::string KPFileName;
 char MaterialFileName[STRINGSIZE];
 
 int CurrentActiveKeyPoint = 0; // legacy
-
-// local server socket
-int SocketToLocalServer = -1;
 
 // global variables for weighting
 float linear_weight( float distance, float radius, int exponent );
@@ -389,7 +364,7 @@ public:
   int indNormal1; 
   int indNormal2; 
   int indNormal3;
-  Face( void ) {
+  Face( ) {
     indNormal1 = -1;
     indNormal2 = -1;
     indNormal3 = -1;
@@ -397,7 +372,7 @@ public:
     indVertex2 = -1;
     indVertex3 = -1;
   }
-  ~Face( void ) {
+  ~Face( ) {
   };
 };
 
@@ -494,7 +469,7 @@ int gettimeofday(struct timeval * tp, struct timezone * tzp)
 int main(int argc, char **argv) 
 {
 	MeshFileName = path_utils::parent_path(std::string(argv[0])) + "\\head_modified.obj";
-	KPFileName = path_utils::parent_path(std::string(argv[0])) + "\\head_modified_KP.obj.obj";
+	KPFileName = path_utils::parent_path(std::string(argv[0])) + "\\head_modified_KP.obj";
 
 	printf( "Mesh file (%s)\n" , MeshFileName );
 	printf( "KP file (%s)\n" , KPFileName );
@@ -1016,27 +991,6 @@ void animate_vertices_in_mesh( void ) {
 //////////////////////////////////////////////////////////////////
 
 // face display
-
-// void displayFace( int indFace ) {
-//   glNormal3f( TabNormals[ TabFaces[indFace].indNormal1 ].x , 
-//           TabNormals[ TabFaces[indFace].indNormal1 ].y , 
-//           TabNormals[ TabFaces[indFace].indNormal1 ].z );
-//   glVertex3f( TabVertices[ TabFaces[indFace].indVertex1 ].location.x ,
-//           TabVertices[ TabFaces[indFace].indVertex1 ].location.y ,
-//           TabVertices[ TabFaces[indFace].indVertex1 ].location.z );
-//   glNormal3f( TabNormals[ TabFaces[indFace].indNormal2 ].x , 
-//           TabNormals[ TabFaces[indFace].indNormal2 ].y , 
-//           TabNormals[ TabFaces[indFace].indNormal2 ].z );
-//   glVertex3f( TabVertices[ TabFaces[indFace].indVertex2 ].location.x ,
-//           TabVertices[ TabFaces[indFace].indVertex2 ].location.y ,
-//           TabVertices[ TabFaces[indFace].indVertex2 ].location.z );
-//   glNormal3f( TabNormals[ TabFaces[indFace].indNormal3 ].x , 
-//           TabNormals[ TabFaces[indFace].indNormal3 ].y , 
-//           TabNormals[ TabFaces[indFace].indNormal3 ].z );
-//   glVertex3f( TabVertices[ TabFaces[indFace].indVertex3 ].location.x ,
-//           TabVertices[ TabFaces[indFace].indVertex3 ].location.y ,
-//           TabVertices[ TabFaces[indFace].indVertex3 ].location.z );
-// }
 
 void displayFace( int indFace ) {
   glNormal3f( TabNormals[ TabFaces[indFace].indNormal1 ].x , 
@@ -1592,74 +1546,6 @@ void render_scene( void )
   glutSwapBuffers();
 }
 
-/// HOST ADDRESS 
-class vc_MySocketAddresse {
-public:
-  bool d_valid;
-  sockaddr_in d_sockAddresse;
-  int port;
-  char host[100];
-  char host_IP[100];
-
-  vc_MySocketAddresse() {
-    memset((char *)&d_sockAddresse,0,sizeof(d_sockAddresse));
-    *host = 0;
-    *host_IP = 0;
-    d_valid = false;
-  }
-
-  ~vc_MySocketAddresse(void) {
-  }
-
-  void IPAdd() {
-    // gets the string that represents the address "a.b.c.d"
-    char* s = inet_ntoa( d_sockAddresse.sin_addr );
-    if( s == NULL )
-      printf( "Erreur: IPAdd() ne peut convertir l'adresse.\n" );
-    else
-      strcpy( host_IP, s );
-  }
-
-  void InitFromResolver(char *_host, const int _port) {
-    struct hostent 		*hostinfo;
-
-    strcpy( host , _host );  
-    port=_port;
-    d_sockAddresse.sin_family=AF_INET;
-    d_sockAddresse.sin_port=htons(port);
-
-    hostinfo=gethostbyname(host);
-    if (hostinfo==NULL) {
-      fprintf( stdout , "Unknown host %s \n", _host);
-      memset((char *)&d_sockAddresse,0,sizeof(d_sockAddresse));
-      d_valid = false;
-      return;
-    }
-
-    d_sockAddresse.sin_addr=*(struct in_addr*)hostinfo->h_addr;
-    IPAdd();
-    d_valid = true;
-  } 
-
-  void TestUDPConnection( void ) {
-    vc_MySocketAddresse sock;
-    char nam[100];
-
-    gethostname(nam, 100);
-    printf( "%s\n" , nam );
-    sock.InitFromResolver(nam, 3120);
-
-    char* s = inet_ntoa(sock.d_sockAddresse.sin_addr);
-
-    printf( "%s\n" , s );
-  }
-};
-
-
-//////////////////////////////////////////////////////////////////
-// MAIN CLIENT
-//////////////////////////////////////////////////////////////////
-
 KP *keypoint_with_id(char *id) {
     for(int i = 0; i < NbKPs; ++i) {
         KP *kp = &TabKPs[i];
@@ -1669,9 +1555,6 @@ KP *keypoint_with_id(char *id) {
     }
     return NULL;
 }
-
-// local server socket
-
 
 
 float curve_ease_inout_quad(float elapsed, float duration, float startVal, float endVal) {
@@ -1731,7 +1614,7 @@ void update_keypoints() {
             float startZ = tab_KF_z[indKP][fromIndKF];
             float endZ = tab_KF_z[indKP][toIndKF];
             
-            KP& kp = *keypoint_with_id(tab_ID[indKP]);
+            KP& kp = *keypoint_with_id(kpID);
             kp.translation.x = curve(timeElapsed, animDuration, startX, endX);
             kp.translation.y = curve(timeElapsed, animDuration, startY, endY);
             kp.translation.z = curve(timeElapsed, animDuration, startZ, endZ);
@@ -1765,15 +1648,9 @@ void animate_frame() {
 }
 
 void idle_func() {
-    // printf("idle func\n");
-    // fflush(stdout);
     if (isAnimating) {
         animate_frame();
         isAnimating = timeElapsed < animDuration;
-        // if(!isAnimating) {
-        //     printf("end animation\n");
-        //     fflush(stdout);
-        // }
     }
 }
 
