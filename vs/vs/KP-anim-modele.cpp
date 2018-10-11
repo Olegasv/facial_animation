@@ -11,8 +11,9 @@
 #include <ctype.h>
 #include <stdbool.h>
 #include <string>
+#include <fstream>
+#include <sstream>
 #include "path_utils.hpp"
-
 
 #define    KEY_ESC  27
 #define    PI       3.1415926535898
@@ -173,7 +174,6 @@ int Trace = false;
 float Zoom = 0.3;
 std::string MeshFileName;;
 std::string KPFileName;
-char MaterialFileName[STRINGSIZE];
 
 int CurrentActiveKeyPoint = 0; // legacy
 
@@ -382,8 +382,6 @@ public:
   char *id;
   // initial coordinates
   Point location;
-  //  index of the mesh
-  int indMesh;
   //  index of vertex
   int indVertex;
   // current translation
@@ -392,7 +390,6 @@ public:
   KP( void ) {
     id = new char[STRINGSIZE];
     location.init();
-    indMesh = -1;
     indVertex = -1;
     translation.init();
   }
@@ -405,23 +402,15 @@ KP *keypoint_with_id(char *id);
 
 class Mesh {
 public:
-  char *id;
-  char *matId;
   int indFaceIni;
   int indFaceEnd;
   int nbKPs;
   Mesh( void ) {
-    id = new char[STRINGSIZE];
-    id[0] = 0;
-    matId = new char[STRINGSIZE];
-    matId[0] = 0;
     indFaceIni = 0;
     indFaceEnd = 0;
     nbKPs = 0;
   }
   ~Mesh( void ) {
-    delete [] id;
-    delete [] matId;
   }
 };
 
@@ -432,7 +421,7 @@ public:
 Vertex   *TabVertices = NULL;
 Face     *TabFaces = NULL;
 Vector   *TabNormals = NULL;
-Mesh     *TabMeshes = NULL;
+Mesh     TabMeshes;
 KP       *TabKPs = NULL;
 int      NbMeshes = 0;
 int      NbVertices = 0;
@@ -515,171 +504,51 @@ int main(int argc, char **argv)
 //////////////////////////////////////////////////////////////////
 
 // OBJ file parsing (Alias Wavefront ASCII format)
-void parse_mesh_obj( FILE *file )
+void parse_mesh_obj( const std::string & filename )
 {
-  char    tag[256];
-  char    line[256];
-  char    ch;
-  
-  // Two comment lines
-  // # Blender3D v244 OBJ File: Anime_Girl.blend
-  // # www.blender3d.org
-  fgets  ( line, 256, file );
-  fgets  ( line, 256, file );
-  
-  // material name
-  fgets  ( line, 256, file );
-  sscanf ( line, "%s %s", 
-	   tag, 
-	   MaterialFileName );
-  // printf( "MaterialFileName %s %s\n" , tag , MaterialFileName );
-  
-  // mesh ID
-  fgets  ( line, 256, file );
-  sscanf ( line, "%s", tag );
-    
-  while( strcmp( tag , "o" ) == 0 ) {
-    if( NbMeshes > NBMAXMESH ) {
-      printf( "Error: Excessive number of Meshes\n" );
-      throw 0;
-    }
-
-    // mesh ID
-    sscanf ( line, "%s %s", 
-	     tag , 
-	     TabMeshes[ NbMeshes ].id );
-    // printf( "Mesh ID #%d %s\n" , NbMeshes , TabMeshes[ NbMeshes ].id );
-    
-    // next tag
-    fgets  ( line, 256, file );
-    sscanf ( line, "%s", tag );
-  
-    // Scan for Verts in this mesh
-    while( strcmp( tag , "v" ) == 0 ) {
-      if( NbVertices > NBMAXVERTICES ) {
-	printf( "Error: Excessive number of vertices\n" );
-	throw 0;
-      }
-      sscanf ( line, "%s %f %f %f", 
-	       tag,
-	       &(TabVertices[NbVertices].location.x),
-	       &(TabVertices[NbVertices].location.y),
-	       &(TabVertices[NbVertices].location.z) );
-      TabVertices[NbVertices].curLocation = TabVertices[NbVertices].location;
-      // printf( "vertex %f %f %f\n" , TabVertices[NbVertices].location.x,
-      // 	      TabVertices[NbVertices].location.y,
-      // 	      TabVertices[NbVertices].location.z );
-      NbVertices++;
-      fgets  ( line, 256, file );
-      sscanf ( line, "%s", tag );
-    }
-    
-    // Scan for Norms in this mesh
-    while( strcmp( tag , "vn" ) == 0 ) {
-      sscanf ( line, "%s %f %f %f", 
-	       tag ,
-	       &(TabNormals[NbNormals].x),
-	       &(TabNormals[NbNormals].y),
-	       &(TabNormals[NbNormals].z) );
-      // printf( "normal %f %f %f\n" , TabNormals[NbNormals].x,
-      // 	      TabNormals[NbNormals].y,
-      // 	      TabNormals[NbNormals].z );
-      NbNormals++;
-      fgets  ( line, 256, file );
-      sscanf ( line, "%s", tag );
-    }
-    
-    // Scan for Mat in this mesh
-    if( strcmp( tag , "usemtl" ) == 0 ) {
-      sscanf ( line, "%s %s", 
-	       tag , 
-	       TabMeshes[ NbMeshes ].matId );
-      // printf( "Mesh %d mat %s\n" , NbMeshes , TabMeshes[ NbMeshes ].matId );
-      fgets  ( line, 256, file );
-      sscanf ( line, "%s", tag );
-    }
-    
-    TabMeshes[NbMeshes].indFaceIni = NbFaces;
-    // printf( "Mesh #%d face ini %d\n" , NbMeshes , TabMeshes[NbMeshes].indFaceIni );
-
-    // Scan for Faces in this mesh
-    while( strcmp( tag , "f" ) == 0 
-	   || strcmp( tag , "usemtl" ) == 0
-	   || strcmp( tag , "s" ) == 0 ) {
-      if( NbFaces > NBMAXFACES ) {
-	printf( "Error: Excessive number of faces\n" );
-	throw 0;
-      }
-
-      // Scan for Mat in this mesh
-      // currently only one mat per mesh
-      if( strcmp( tag , "usemtl" ) == 0 ) {
-	sscanf ( line, "%s", 
-		 TabMeshes[ NbMeshes ].matId );
-	// printf( "mat %s" , line );
-      }
-      // Scan for Smooth boolean in this mesh
-      else if( strcmp( tag , "s" ) == 0 ) {
-	sscanf ( line, "%s", tag );
-      }
-      // Scan for a Face in this mesh
-      else {
-	sscanf( line, "%s %d//%d %d//%d %d//%d", 
-		tag,
-		&(TabFaces[NbFaces].indVertex1),
-		&(TabFaces[NbFaces].indNormal1),
-		&(TabFaces[NbFaces].indVertex2),
-		&(TabFaces[NbFaces].indNormal2),
-		&(TabFaces[NbFaces].indVertex3),
-		&(TabFaces[NbFaces].indNormal3) );
-	// indices start from 1 in OBJ format
-	// we make start from 0 for C++
-	TabFaces[NbFaces].indVertex1--;
-	TabFaces[NbFaces].indVertex2--;
-	TabFaces[NbFaces].indVertex3--;
-	TabFaces[NbFaces].indNormal1--;
-	TabFaces[NbFaces].indNormal2--;
-	TabFaces[NbFaces].indNormal3--;
-	// printf( "face %d %d %d %d %d %d\n" , 
-	//       TabFaces[NbFaces].indVertex1,
-	//       TabFaces[NbFaces].indNormal1,
-	//       TabFaces[NbFaces].indVertex2,
-	//       TabFaces[NbFaces].indNormal2,
-	//       TabFaces[NbFaces].indVertex3,
-	//       TabFaces[NbFaces].indNormal3 );
-	if( TabFaces[NbFaces].indVertex1 >= 0 
-	    && TabFaces[NbFaces].indVertex2 >= 0 
-	    && TabFaces[NbFaces].indVertex3 >= 0 
-	    && TabFaces[NbFaces].indNormal1 >= 0 
-	    && TabFaces[NbFaces].indNormal2 >= 0 
-	    && TabFaces[NbFaces].indNormal3 >= 0 ) {
-	  NbFaces++;
+	std::ifstream in(filename);
+	if (!in.is_open())
+	{
+		printf("File %s not found\n", MeshFileName);
+		return;
 	}
-      }
+	while (!in.eof()) {
+		std::string line;
+		std::getline(in, line);
+		std::stringstream iss(line.c_str());
 
-      if( !fgets  ( line, 256, file ) ) {
-	TabMeshes[NbMeshes].indFaceEnd = NbFaces;
-	printf( "Mesh #%d %s Faces %d-%d\n" , NbMeshes , 
-		TabMeshes[ NbMeshes ].id , 
-		TabMeshes[ NbMeshes ].indFaceIni ,
-		TabMeshes[ NbMeshes ].indFaceEnd );
-	NbMeshes++;
-	return;
-      }
-      sscanf ( line, "%s", tag );
-    }
-
-    TabMeshes[NbMeshes].indFaceEnd = NbFaces;
-    printf( "Mesh #%d %s Faces %d-%d\n" , NbMeshes , 
-	    TabMeshes[ NbMeshes ].id , 
-	    TabMeshes[ NbMeshes ].indFaceIni ,
-	    TabMeshes[ NbMeshes ].indFaceEnd );
-    NbMeshes++;
-  }
+		char trash;
+		if (!line.compare(0, 2, "v ")) {
+			iss >> trash;
+			iss >> TabVertices[NbVertices].location.x >> TabVertices[NbVertices].location.y >> TabVertices[NbVertices].location.z;
+			TabVertices[NbVertices].curLocation = TabVertices[NbVertices].location;
+			NbVertices++;
+		}
+		else if (!line.compare(0, 3, "vn ")) {
+			iss >> trash >> trash;
+			iss >> TabNormals[NbNormals].x >> TabNormals[NbNormals].y >> TabNormals[NbNormals].z;
+			NbNormals++;
+		}
+		else if (!line.compare(0, 2, "f ")) {
+			iss >> trash;
+			iss >> TabFaces[NbFaces].indVertex1 >> trash >> trash  >> TabFaces[NbFaces].indNormal1 >>
+				TabFaces[NbFaces].indVertex2 >> trash >> trash >> TabFaces[NbFaces].indNormal2 >>
+				TabFaces[NbFaces].indVertex3 >> trash >> trash >> TabFaces[NbFaces].indNormal3;
+			
+			//// indices start from 1 in OBJ format
+			TabFaces[NbFaces].indVertex1--;
+			TabFaces[NbFaces].indVertex2--;
+			TabFaces[NbFaces].indVertex3--;
+			TabFaces[NbFaces].indNormal1--;
+			TabFaces[NbFaces].indNormal2--;
+			TabFaces[NbFaces].indNormal3--;
+			NbFaces++;
+		}
+	}
+	TabMeshes.indFaceIni = 0;
+	TabMeshes.indFaceEnd = NbFaces;
 }
 
-// key-point OBJ file parsing 
-// (inhouse format inspired from the Alias Wavefront ASCII format)
 
 void parse_KP_obj( FILE *file )
 {
@@ -690,7 +559,6 @@ void parse_KP_obj( FILE *file )
   int     ignore3;
   char    line[256];
   char    meshID[256];
-  int     indMesh;
   char    ch;
   
   // Two comment lines
@@ -709,18 +577,6 @@ void parse_KP_obj( FILE *file )
     sscanf ( line, "%s %s", 
 	     tag , meshID );
 
-    // finds the index of the mesh associated with this KP
-    indMesh = -1;
-    for( int ind = 0 ; ind < NbMeshes ; ind++ ) {
-      if( strcmp( meshID , TabMeshes[ ind ].id ) == 0 ) {
-	indMesh = ind;
-	// printf( "Mesh #%d ID %s\n" , ind , meshID );
-      }
-    }
-    if( indMesh == -1 ) {
-      printf( "Error: KeyPoint Mesh ID [%s] not found\n" , meshID );
-    }
-    
     // next tag
     fgets  ( line, 256, file );
     sscanf ( line, "%s", tag );
@@ -736,9 +592,6 @@ void parse_KP_obj( FILE *file )
       sscanf ( line, "%s %s", 
 	       tag, TabKPs[NbKPs].id );
 
-      // stores the index of the mesh associated with this keypoint
-      TabKPs[NbKPs].indMesh = indMesh;
-
       fgets  ( line, 256, file );
       sscanf ( line, "%s %f %f %f", 
 	       tag,
@@ -752,12 +605,11 @@ void parse_KP_obj( FILE *file )
       if( !fgets  ( line, 256, file ) ) {
 	numberMeshKPs++;
 	NbKPs++;
-	if( indMesh >= 0 ) {
-	  TabMeshes[indMesh].nbKPs = numberMeshKPs;
-	}
-	printf( "Mesh #%d %s KPs %d\n" , indMesh , 
-		TabMeshes[ indMesh ].id , 
-		TabMeshes[ indMesh ].nbKPs );
+	
+	TabMeshes.nbKPs = numberMeshKPs;
+	
+	printf( "Mesh #%d KPs %d\n" , 0 , 
+		TabMeshes.nbKPs );
 	return;
       }
 
@@ -766,13 +618,9 @@ void parse_KP_obj( FILE *file )
       NbKPs++;
     }
 
-    if( indMesh >= 0 ) {
-      TabMeshes[indMesh].nbKPs = numberMeshKPs;
-    }
-
-    printf( "Mesh #%d %s KPs %d\n" , indMesh , 
-	    TabMeshes[ indMesh ].id , 
-	    TabMeshes[ indMesh ].nbKPs );
+    TabMeshes.nbKPs = numberMeshKPs;
+    printf( "Mesh #%d KPs %d\n" , 0 , 
+	    TabMeshes.nbKPs );
   }
 }
 
@@ -784,14 +632,14 @@ void parse_KP_obj( FILE *file )
 // not really used, just a check
 
 void locate_KP_in_mesh( void ) {
-  for( int indMesh = 0 ; indMesh < NbMeshes ; indMesh++ ) {
+	int indMesh = 0;
     for( int indKP = 0 ; indKP < NbKPs ; indKP++ ) {
-      if( TabKPs[indKP].indMesh == indMesh ) {
+      
 	// accesses the vertices from a mesh and its faces
 		  float minDist = FLT_MAX;
 	int indVertexKP = -1;
-	for (int indFace = TabMeshes[ indMesh ].indFaceIni ; 
-	     indFace < TabMeshes[ indMesh ].indFaceEnd ; 
+	for (int indFace = TabMeshes.indFaceIni ; 
+	     indFace < TabMeshes.indFaceEnd ; 
 	     indFace++) {
 	  float d;
 	  if( (d = TabKPs[indKP].location.distance( 
@@ -814,9 +662,8 @@ void locate_KP_in_mesh( void ) {
 	  }
 	}
 	TabKPs[indKP].indVertex = indVertexKP;
-	printf( "KP %s Mesh %s %f %f %f Vertex %d %f %f %f dist %f\n" , 
+	printf( "KP %s Mesh %f %f %f Vertex %d %f %f %f dist %f\n" , 
 		TabKPs[indKP].id ,
-		TabMeshes[ indMesh ].id ,
 		TabKPs[indKP].location.x ,
 		TabKPs[indKP].location.y ,
 		TabKPs[indKP].location.z ,
@@ -826,8 +673,6 @@ void locate_KP_in_mesh( void ) {
 		TabVertices[indVertexKP].location.z ,
 		minDist );
       }
-    }
-  }
 }
 
 // a keypoint weighting scheme: linear weighting
@@ -922,7 +767,6 @@ void weight_vertices_on_KP_in_mesh( float radius , int exponent ,
 				    float (*pt2Function)(float,float,int) ) {
     for( int indMesh = 0 ; indMesh < NbMeshes ; indMesh++ ) {
         for( int indKP = 0 ; indKP < NbKPs ; indKP++ ) {
-          if( TabKPs[indKP].indMesh == indMesh ) {
             int nbWeightedVertices = 0;
 
             // marks all the vertices as unprocessed for the current keypoint
@@ -931,8 +775,8 @@ void weight_vertices_on_KP_in_mesh( float radius , int exponent ,
             }
 
             // accesses the vertices from a mesh and its faces
-            for (int indFace = TabMeshes[ indMesh ].indFaceIni ; 
-                 indFace < TabMeshes[ indMesh ].indFaceEnd ; 
+            for (int indFace = TabMeshes.indFaceIni ; 
+                 indFace < TabMeshes.indFaceEnd ; 
                  indFace++) {
               if( weight_one_vertex( TabFaces[indFace].indVertex1 , indKP , radius , exponent , pt2Function ) == Weighting ) {
                 nbWeightedVertices++;
@@ -944,12 +788,6 @@ void weight_vertices_on_KP_in_mesh( float radius , int exponent ,
                 nbWeightedVertices++;
               }
             }
-	
-    // printf( "KP %s Mesh %s Nb weighted vertices %d\n" , 
-    //     TabKPs[indKP].id ,
-    //     TabMeshes[ TabKPs[indKP].indMesh ].id ,
-    //     nbWeightedVertices );
-      }
     }
   }
 }
@@ -1017,13 +855,12 @@ void displayFace( int indFace ) {
 
 void make_mesh( void ) {
   glNewList(MeshID, GL_COMPILE);  
-    for( int ind = 0 ; ind < NbMeshes ; ind++ ) {
       // displays wireframe
       if( TypeOfSurfaceDisplay == MESH ) {
 	glEnable( GL_COLOR_MATERIAL );
 	glColor3f( .0 , .1  , 0.2 );
-	for (int i = TabMeshes[ ind ].indFaceIni ; 
-	     i < TabMeshes[ ind ].indFaceEnd ; i++) {
+	for (int i = TabMeshes.indFaceIni ; 
+	     i < TabMeshes.indFaceEnd ; i++) {
 	  glBegin(GL_LINE_LOOP);
 	  displayFace(i);
 	  glEnd();
@@ -1037,14 +874,13 @@ void make_mesh( void ) {
 	glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, Ambient_silver);
 	glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, Emission_silver);
 	glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, Shininess_silver);
-	for (int i = TabMeshes[ ind ].indFaceIni ; 
-	     i < TabMeshes[ ind ].indFaceEnd ; i++) {
+	for (int i = TabMeshes.indFaceIni ; 
+	     i < TabMeshes.indFaceEnd ; i++) {
 	  glBegin(GL_TRIANGLES);
 	  displayFace(i);
 	  glEnd();
 	}
       }
-    }
   glEndList();
 }
 
@@ -1101,7 +937,6 @@ void init_scene( void )
   TabVertices = new Vertex[ NBMAXVERTICES ];
   TabFaces = new Face[ NBMAXFACES ];
   TabNormals = new Vector[ NBMAXVERTICES ];
-  TabMeshes = new Mesh[ NBMAXMESH ];
   TabKPs = new KP[ NBMAXKP ];
   
   NbMeshes = 0;
@@ -1110,13 +945,7 @@ void init_scene( void )
   NbNormals = 0;
 
   // parses the mesh (obj format)
-  FILE * fileMesh = fopen(MeshFileName.c_str(), "r" );
-  if( !fileMesh ) {
-    printf( "File %s not found\n" , MeshFileName );
-    exit(0);
-  }
-  parse_mesh_obj( fileMesh );
-  fclose( fileMesh );
+  parse_mesh_obj(MeshFileName);
 
   // parses the keypoints
   FILE * fileKP = fopen(KPFileName.c_str(), "r" );

@@ -1,0 +1,63 @@
+# visual studio
+*.d
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.ilk
+# Precompiled Headers
+*.gch
+*.pch
+*.ipch
+# Compiled Dynamic libraries
+*.so
+*.dylib
+# Fortran module files
+*.mod
+*.smod
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+# Executables
+*.exe
+*.pdb
+*.out
+*.app
+# logs
+*.log
+*.tlog
+*.suo
+#vs
+*.lastbuildstate
+*.opendb
+*.db
+*.idb
+*.ipdb
+*.iobj
+*.recipe
+
+# Xcode
+#
+
+## Build generated
+build/
+DerivedData/
+
+## Various settings
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+xcuserdata/
+
+## Other
+*.moved-aside
+*.xccheckout
+*.xcscmblueprint
+/assets/masks/_err.txt
+/assets/masks/_log.txt
