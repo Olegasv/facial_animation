@@ -631,7 +631,6 @@ void parse_KP_obj(FILE *file)
 // not really used, just a check
 
 void locate_KP_in_mesh(void) {
-	int indMesh = 0;
 	for (int indKP = 0; indKP < NbKPs; indKP++) {
 
 		// accesses the vertices from a mesh and its faces
@@ -711,10 +710,11 @@ int compareIndKPDistance(const void *iKP1, const void *iKP2) {
 	return comp;
 }
 
-WeightingType weight_one_vertex(int indVertex, int indKP,
-	float radius, int exponent,
-	float(*pt2Function)(float, float, int)) {
-	if (!TabVertices[indVertex].weighted) {
+WeightingType weight_one_vertex(int indVertex, int indKP, float radius, int exponent,
+	float(*pt2Function)(float, float, int)) 
+{
+	if (!TabVertices[indVertex].weighted) 
+	{
 		Vertex *v = &TabVertices[indVertex];
 		v->weighted = true;
 
@@ -764,19 +764,20 @@ WeightingType weight_one_vertex(int indVertex, int indKP,
 // vertices weighting: weights all the vertices in a mesh
 
 void weight_vertices_on_KP_in_mesh(float radius, int exponent,
-	float(*pt2Function)(float, float, int)) {
-	for (int indKP = 0; indKP < NbKPs; indKP++) {
+	float(*pt2Function)(float, float, int)) 
+{
+	for (int indKP = 0; indKP < NbKPs; indKP++) 
+	{
 		int nbWeightedVertices = 0;
 
 		// marks all the vertices as unprocessed for the current keypoint
-		for (int indVertex = 0; indVertex < NbVertices; indVertex++) {
+		for (int indVertex = 0; indVertex < NbVertices; indVertex++) 
+		{
 			TabVertices[indVertex].weighted = false;
 		}
 
 		// accesses the vertices from a mesh and its faces
-		for (int indFace = TabMeshes.indFaceIni;
-			indFace < TabMeshes.indFaceEnd;
-			indFace++) {
+		for (int indFace = TabMeshes.indFaceIni; indFace < TabMeshes.indFaceEnd; indFace++) {
 			if (weight_one_vertex(TabFaces[indFace].indVertex1, indKP, radius, exponent, pt2Function) == Weighting) {
 				nbWeightedVertices++;
 			}
